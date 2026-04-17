@@ -404,7 +404,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
 
           <div class="slider-group">
             <div class="slider-header">
-              <span class="slider-label" id="distanceLabel">Distance sémantique</span>
+              <span class="slider-label" id="distanceLabel">K Distance</span>
               <span class="slider-value" id="distVal">3/10 — <em>Proche</em></span>
             </div>
             <input type="range" id="distSlider" min="1" max="10" step="1" value="3" />
@@ -514,7 +514,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
     const I18N = {
       fr: {
         pageTitle: 'Dérive Poétique', langButton: '🇬🇧 EN',
-        sourceLabel: 'Texte source', wordsLabel: 'Mots à modifier', distanceLabel: 'Distance sémantique', passesLabel: 'Passes', topkLabel: 'Candidats par masque',
+        sourceLabel: 'Texte source', wordsLabel: 'Mots à modifier', distanceLabel: 'K Distance', passesLabel: 'Passes', topkLabel: 'Candidats par masque',
         runBtn: 'Lancer la dérive', cancelBtn: 'Interrompre', warmupBtn: 'Précharger les modèles', diffLabel: 'Surligner les changements',
         autoLangHint: 'La langue est détectée automatiquement. Français → CamemBERT, anglais → BERT cased, autres cas → BERT multilingue.', resultsTitle: 'Résultats',
         distLabels: ['Quasi identique','Très proche','Proche','Voisin','Décalé','Tangentiel','Distant','Très distant','Presque surréaliste','Alien'],
@@ -525,7 +525,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       },
       en: {
         pageTitle: 'Poetic Drift', subtitle: 'browser-only version · models loaded locally', langButton: '🇫🇷 FR',
-        sourceLabel: 'Source text', wordsLabel: 'Words to replace', distanceLabel: 'Semantic distance', passesLabel: 'Passes', topkLabel: 'Candidates per mask',
+        sourceLabel: 'Source text', wordsLabel: 'Words to replace', distanceLabel: 'K distance', passesLabel: 'Passes', topkLabel: 'Candidates per mask',
         runBtn: 'Run drift', cancelBtn: 'Cancel', warmupBtn: 'Preload models', diffLabel: 'Highlight changes',
         autoLangHint: 'Language is detected automatically. French → CamemBERT, English → BERT cased, otherwise → multilingual BERT.', resultsTitle: 'Results',
         distLabels: ['Near-identical','Very close','Close','Neighboring','Shifted','Tangential','Distant','Very distant','Nearly surreal','Alien'],
