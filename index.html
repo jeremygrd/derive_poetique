@@ -404,7 +404,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
 
           <div class="slider-group">
             <div class="slider-header">
-              <span class="slider-label" id="distanceLabel">K Distance</span>
+              <span class="slider-label" id="distanceLabel">Distance K</span>
               <span class="slider-value" id="distVal">3/10 — <em>Proche</em></span>
             </div>
             <input type="range" id="distSlider" min="1" max="10" step="1" value="3" />
@@ -440,6 +440,15 @@ Et la treille où le pampre à la rose s'allie.</textarea>
         <label class="cb"><input type="checkbox" id="diffCheck" checked /> <span id="diffLabel">Surligner les changements</span></label>
       </div>
 
+      <div class="row" style="margin-top:12px; align-items:center; gap:10px;">
+        <label class="lbl" for="seedInput" id="seedLabel" style="margin:0; white-space:nowrap;">Seed</label>
+        <input type="number" id="seedInput" min="0" max="999999" step="1" value="42"
+          style="width:110px; padding:7px 10px; border-radius:5px; border:1px solid var(--border);
+                 background:#120f0d; color:var(--text); font-family:inherit; font-size:14px; outline:none;" />
+        <button class="btn btn-ghost" id="randomSeedBtn" title="Seed aléatoire" style="padding:7px 12px;">🎲</button>
+        <span class="small" id="seedHint" style="color:#716350;">Fixe la graine aléatoire — même seed → mêmes résultats.</span>
+      </div>
+
       <div class="small" style="margin-top:14px;" id="autoLangHint">
         La langue est détectée automatiquement. Français → CamemBERT, anglais → BERT cased, autres cas → BERT multilingue.
       </div>
@@ -460,7 +469,11 @@ Et la treille où le pampre à la rose s'allie.</textarea>
     <div id="resultsSection" class="hidden">
       <div class="results-header">
         <h2 class="results-title" id="resultsTitle">Résultats</h2>
-        <div class="results-info" id="resultsInfo"></div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div class="results-info" id="resultsInfo"></div>
+          <button class="btn btn-ghost" id="downloadTxtBtn" style="font-size:11px; padding:7px 12px;" id="downloadTxtBtn">⬇ TXT</button>
+          <button class="btn btn-ghost" id="downloadJsonBtn" style="font-size:11px; padding:7px 12px;" id="downloadJsonBtn">⬇ JSON</button>
+        </div>
       </div>
       <div id="resultsContainer"></div>
     </div>
@@ -514,24 +527,26 @@ Et la treille où le pampre à la rose s'allie.</textarea>
     const I18N = {
       fr: {
         pageTitle: 'Dérive Poétique', langButton: '🇬🇧 EN',
-        sourceLabel: 'Texte source', wordsLabel: 'Mots à modifier', distanceLabel: 'K Distance', passesLabel: 'Passes', topkLabel: 'Candidats par masque',
+        sourceLabel: 'Texte source', wordsLabel: 'Mots à modifier', distanceLabel: 'Distance K', passesLabel: 'Passes', topkLabel: 'Candidats par masque',
+        seedLabel: 'Seed', seedHint: 'Fixe la graine aléatoire — même seed → mêmes résultats.',
         runBtn: 'Lancer la dérive', cancelBtn: 'Interrompre', warmupBtn: 'Précharger les modèles', diffLabel: 'Surligner les changements',
         autoLangHint: 'La langue est détectée automatiquement. Français → CamemBERT, anglais → BERT cased, autres cas → BERT multilingue.', resultsTitle: 'Résultats',
         distLabels: ['Quasi identique','Très proche','Proche','Voisin','Décalé','Tangentiel','Distant','Très distant','Presque surréaliste','Alien'],
         errorPrefix: 'Erreur :', statusInterrupted: 'Interruption demandée. Les remplacements déjà faits restent affichés.', loadingSemantic: 'Chargement du modèle sémantique…', semanticSub: 'Ce modèle sert à estimer la distance entre le mot original et les candidats.', embedderLoadError: 'Impossible de charger le modèle d’embeddings dans le navigateur.', loadingLanguage: 'Chargement du modèle de langue…', fillMaskLoadError: (m) => `Impossible de charger le modèle ${m}.`, downloadingModels: 'Téléchargement / initialisation des modèles…', warmupNeedText: 'Entre d’abord un texte.',
         warmupReady: (lang, model) => `Modèles prêts : <span class="pill">langue détectée : ${lang}</span><span class="pill">modèle masque : ${model}</span><span class="pill">modèle sémantique : ${EMBED_MODEL}</span>`,
-        enterText: 'Entre un texte.', notEnoughWords: 'Le texte ne contient pas assez de mots à transformer.', resultsInfo: (passes, pct, dist, lang, model) => `${passes} passe${passes > 1 ? 's' : ''} · ${pct}% · distance ${dist}/10 · ${lang} · ${model}`,
+        enterText: 'Entre un texte.', notEnoughWords: 'Le texte ne contient pas assez de mots à transformer.', resultsInfo: (passes, pct, dist, lang, model, seed) => `${passes} passe${passes > 1 ? 's' : ''} · ${pct}% · K=${dist} · ${lang} · seed:${seed}`,
         preparingModels: 'Préparation des modèles…', passWord: (p, passes, step, total) => `Passe ${p}/${passes} — mot ${step}/${total}`, searchReplacement: (w) => `Recherche d’un remplacement pour « ${w} »`, passNum: (p) => `Passe ${p}`, substitutions: (n) => `${n} substitution${n > 1 ? 's' : ''}`, detailSubstitutions: 'Détail des substitutions', statusDone: (lang, model) => `Terminé. <span class="pill">langue détectée : ${lang}</span><span class="pill">modèle utilisé : ${model}</span><span class="pill">embeddings : ${EMBED_MODEL}</span>`, substitutionLocal: 'substitution locale'
       },
       en: {
         pageTitle: 'Poetic Drift', subtitle: 'browser-only version · models loaded locally', langButton: '🇫🇷 FR',
-        sourceLabel: 'Source text', wordsLabel: 'Words to replace', distanceLabel: 'K distance', passesLabel: 'Passes', topkLabel: 'Candidates per mask',
+        sourceLabel: 'Source text', wordsLabel: 'Words to replace', distanceLabel: 'Distance K', passesLabel: 'Passes', topkLabel: 'Candidates per mask',
+        seedLabel: 'Seed', seedHint: 'Sets the random seed — same seed → same results.',
         runBtn: 'Run drift', cancelBtn: 'Cancel', warmupBtn: 'Preload models', diffLabel: 'Highlight changes',
         autoLangHint: 'Language is detected automatically. French → CamemBERT, English → BERT cased, otherwise → multilingual BERT.', resultsTitle: 'Results',
         distLabels: ['Near-identical','Very close','Close','Neighboring','Shifted','Tangential','Distant','Very distant','Nearly surreal','Alien'],
         errorPrefix: 'Error:', statusInterrupted: 'Cancellation requested. Changes already made stay visible.', loadingSemantic: 'Loading semantic model…', semanticSub: 'This model estimates the distance between the original word and the candidates.', embedderLoadError: 'Unable to load the embedding model in the browser.', loadingLanguage: 'Loading language model…', fillMaskLoadError: (m) => `Unable to load model ${m}.`, downloadingModels: 'Downloading / initializing models…', warmupNeedText: 'Enter some text first.',
         warmupReady: (lang, model) => `Models ready: <span class="pill">detected language: ${lang}</span><span class="pill">mask model: ${model}</span><span class="pill">semantic model: ${EMBED_MODEL}</span>`,
-        enterText: 'Enter some text.', notEnoughWords: 'The text does not contain enough words to transform.', resultsInfo: (passes, pct, dist, lang, model) => `${passes} pass${passes > 1 ? 'es' : ''} · ${pct}% · distance ${dist}/10 · ${lang} · ${model}`,
+        enterText: 'Enter some text.', notEnoughWords: 'The text does not contain enough words to transform.', resultsInfo: (passes, pct, dist, lang, model, seed) => `${passes} pass${passes > 1 ? 'es' : ''} · ${pct}% · K=${dist} · ${lang} · seed:${seed}`,
         preparingModels: 'Preparing models…', passWord: (p, passes, step, total) => `Pass ${p}/${passes} — word ${step}/${total}`, searchReplacement: (w) => `Searching a replacement for “${w}”`, passNum: (p) => `Pass ${p}`, substitutions: (n) => `${n} substitution${n > 1 ? 's' : ''}`, detailSubstitutions: 'Substitution details', statusDone: (lang, model) => `Done. <span class="pill">detected language: ${lang}</span><span class="pill">model used: ${model}</span><span class="pill">embeddings: ${EMBED_MODEL}</span>`, substitutionLocal: 'local substitution'
       }
     };
@@ -552,6 +567,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       runBtn: document.getElementById('runBtn'),
       cancelBtn: document.getElementById('cancelBtn'),
       warmupBtn: document.getElementById('warmupBtn'),
+      seedInput: document.getElementById('seedInput'),
       diffCheck: document.getElementById('diffCheck'),
       progressBox: document.getElementById('progressBox'),
       progressText: document.getElementById('progressText'),
@@ -566,6 +582,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
 
     let cancelFlag = false;
     let allResults = [];
+    let lastRunMeta = null;
     let currentFillMaskModelId = null;
     let fillMaskPipe = null;
     let embedder = null;
@@ -587,6 +604,8 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       document.getElementById('diffLabel').textContent = t('diffLabel');
       document.getElementById('autoLangHint').textContent = t('autoLangHint');
       document.getElementById('resultsTitle').textContent = t('resultsTitle');
+      document.getElementById('seedLabel').textContent = t('seedLabel');
+      document.getElementById('seedHint').textContent = t('seedHint');
       updateUIValues(); renderResults();
     }
     function isRunActive(runId) { return isRunning && runId === currentRunId && !cancelFlag; }
@@ -742,16 +761,28 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       return true;
     }
 
-    function shuffled(array) {
+    // ── PRNG déterministe (mulberry32) ───────────────────────────────────────
+    function mulberry32(seed) {
+      let s = seed >>> 0;
+      return function() {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function shuffled(array, rng) {
       const arr = array.slice();
+      const rand = rng || Math.random.bind(Math);
       for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rand() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
       }
       return arr;
     }
 
-    function selectTargetIndices(tokens, pct, lang) {
+    function selectTargetIndices(tokens, pct, lang, rng) {
       const candidates = [];
       for (let i = 0; i < tokens.length; i++) {
         if (tokens[i].kind === 'word' && isContentWord(tokens[i], lang, tokens, i)) {
@@ -759,7 +790,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
         }
       }
       const wanted = Math.max(1, Math.round(candidates.length * pct / 100));
-      return shuffled(candidates).slice(0, wanted).sort((a, b) => a - b);
+      return shuffled(candidates, rng).slice(0, wanted).sort((a, b) => a - b);
     }
 
     async function getEmbedder() {
@@ -1047,6 +1078,7 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       const dist = +ui.distSlider.value;
       const passes = +ui.passSlider.value;
       const topK = +ui.topKSlider.value;
+      const baseSeed = (parseInt(ui.seedInput.value, 10) || 0) >>> 0;
 
       if (!text) { isRunning = false; return showError(t('enterText')); }
       if (!text.match(/\p{L}/u)) { isRunning = false; return showError(t('notEnoughWords')); }
@@ -1062,7 +1094,8 @@ Et la treille où le pampre à la rose s'allie.</textarea>
         const detection = detectLanguage(text);
         const lang = detection.lang === 'unknown' ? 'fr' : detection.lang;
         const modelId = chooseFillMaskModel(lang);
-        ui.resultsInfo.textContent = t('resultsInfo', passes, pct, dist, LANGUAGE_LABELS[detection.lang] || detection.lang, modelId);
+        ui.resultsInfo.textContent = t('resultsInfo', passes, pct, dist, LANGUAGE_LABELS[detection.lang] || detection.lang, modelId, baseSeed);
+        lastRunMeta = { text, pct, dist, passes, topK, seed: baseSeed, lang: LANGUAGE_LABELS[detection.lang] || detection.lang, modelId };
 
         showProgress(t('preparingModels'), 2, `${LANGUAGE_LABELS[detection.lang] || detection.lang} → ${modelId}`, true);
         await Promise.all([getFillMaskPipeline(modelId), getEmbedder()]);
@@ -1072,7 +1105,8 @@ Et la treille où le pampre à la rose s'allie.</textarea>
         for (let p = 0; p < passes; p++) {
           if (!isRunActive(myRunId)) break;
           let tokens = tokenize(currentText);
-          const targetIndices = selectTargetIndices(tokens, pct, lang);
+          const rng = mulberry32(baseSeed + p);
+          const targetIndices = selectTargetIndices(tokens, pct, lang, rng);
           const changes = [];
           if (!targetIndices.length) { allResults.push({ pass: p + 1, poem: currentText, changes: [] }); continue; }
 
@@ -1152,6 +1186,85 @@ Et la treille où le pampre à la rose s'allie.</textarea>
       for (let i = 0; i < targetIndex; i++) total += tokens[i].value.length;
       return total;
     }
+
+    // ── Téléchargement ───────────────────────────────────────────────────────
+    function buildDownloadTxt() {
+      if (!lastRunMeta || !allResults.length) return '';
+      const m = lastRunMeta;
+      const date = new Date().toLocaleString();
+      const sep = '─'.repeat(60);
+      let out = `=== Dérive Poétique — ${date} ===
+
+`;
+      out += `TEXTE SOURCE
+${sep}
+${m.text}
+
+`;
+      out += `PARAMÈTRES
+${sep}
+`;
+      out += `Passes : ${m.passes}  |  Mots : ${m.pct}%  |  Distance K : ${m.dist}/10  |  Candidats : ${m.topK}  |  Seed : ${m.seed}
+`;
+      out += `Langue : ${m.lang}  |  Modèle masque : ${m.modelId}  |  Modèle sémantique : ${EMBED_MODEL}
+
+`;
+      for (const r of allResults) {
+        out += `
+${'═'.repeat(60)}
+PASSE ${r.pass}
+${'═'.repeat(60)}
+
+${r.poem}
+`;
+        if (r.changes.length) {
+          out += `
+Substitutions :
+`;
+          for (const c of r.changes) out += `  ${c.original} → ${c.replacement}
+`;
+        }
+      }
+      return out;
+    }
+
+    function buildDownloadJson() {
+      if (!lastRunMeta || !allResults.length) return '';
+      return JSON.stringify({
+        meta: {
+          date: new Date().toISOString(),
+          ...lastRunMeta,
+          embedModel: EMBED_MODEL,
+        },
+        passes: allResults.map(r => ({
+          pass: r.pass,
+          poem: r.poem,
+          changes: r.changes.map(c => ({ original: c.original, replacement: c.replacement, contextual: c.contextual, similarity: c.similarity }))
+        }))
+      }, null, 2);
+    }
+
+    function triggerDownload(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    document.getElementById('downloadTxtBtn').addEventListener('click', () => {
+      const content = buildDownloadTxt();
+      if (!content) return;
+      triggerDownload(content, 'derive_poetique.txt', 'text/plain;charset=utf-8');
+    });
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      const content = buildDownloadJson();
+      if (!content) return;
+      triggerDownload(content, 'derive_poetique.json', 'application/json');
+    });
+    document.getElementById('randomSeedBtn').addEventListener('click', () => {
+      ui.seedInput.value = Math.floor(Math.random() * 1000000);
+    });
 
     ui.diffCheck.addEventListener('change', renderResults);
     ui.runBtn.addEventListener('click', runDrift);
