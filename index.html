@@ -379,23 +379,15 @@
 
     <div class="panel" style="margin-bottom:24px;">
       <label class="lbl" for="poemInput" id="sourceLabel">Texte source</label>
-      <textarea id="poemInput">C’est un trou de verdure où chante une rivière,
-Accrochant follement aux herbes des haillons
-D’argent ; où le soleil, de la montagne fière,
-Luit : c’est un petit val qui mousse de rayons.
+      <textarea id="poemInput">Je suis le ténébreux, le veuf, l'inconsolé,
+Le prince d'Aquitaine à la tour abolie :
+Ma seule étoile est morte, et mon luth constellé
+Porte le soleil noir de la Mélancolie.
 
-Un soldat jeune, bouche ouverte, tête nue,
-Et la nuque baignant dans le frais cresson bleu,
-Dort ; il est étendu dans l’herbe, sous la nue,
-Pâle dans son lit vert où la lumière pleut.
-
-Les pieds dans les glaïeuls, il dort. Souriant comme
-Sourirait un enfant malade, il fait un somme :
-Nature, berce-le chaudement : il a froid.
-
-Les parfums ne font pas frissonner sa narine ;
-Il dort dans le soleil, la main sur sa poitrine,
-Tranquille. Il a deux trous rouges au côté droit.</textarea>
+Dans la nuit du tombeau, toi qui m'as consolé,
+Rends-moi le Pausilippe et la mer d'Italie,
+La fleur qui plaisait tant à mon cœur désolé,
+Et la treille où le pampre à la rose s'allie.</textarea>
     </div>
 
     <div class="panel">
@@ -889,41 +881,81 @@ Tranquille. Il a deux trous rouges au côté droit.</textarea>
       return Math.max(0, Math.min(1, score));
     }
 
-    async function chooseReplacement(maskedText, originalWord, distance, topK, lang, modelId) {
-      const candidates = await getFillMaskCandidates(maskedText, modelId, topK);
-      const shortlisted = preselectCandidates(candidates, originalWord, lang);
-      if (!shortlisted.length) return null;
+    // ── Batch fill-mask: un seul appel modèle pour N masques ──────────────────
+    async function getBatchFillMaskCandidates(maskedTexts, modelId, topK) {
+      const results = new Array(maskedTexts.length);
+      const uncachedIdx = [];
+      const uncachedTexts = [];
 
-      const targetSimilarity = mapDistanceToTargetSimilarity(distance);
-      const embOriginal = await getWordEmbedding(originalWord);
-      const rescored = [];
-
-      for (let i = 0; i < shortlisted.length; i++) {
-        const item = shortlisted[i];
-        let similarity = 0.5;
-        try {
-          const embCandidate = await getWordEmbedding(item.token);
-          similarity = embOriginal && embCandidate ? cosine(embOriginal, embCandidate) : 0.5;
-        } catch {
-          similarity = 0.5;
+      for (let i = 0; i < maskedTexts.length; i++) {
+        const key = getFillMaskCacheKey(modelId, maskedTexts[i], topK);
+        if (fillMaskCache.has(key)) {
+          results[i] = fillMaskCache.get(key);
+        } else {
+          uncachedIdx.push(i);
+          uncachedTexts.push(maskedTexts[i]);
         }
+      }
 
+      if (uncachedTexts.length > 0) {
+        const unmasker = await getFillMaskPipeline(modelId);
+        let batchOut;
+        if (uncachedTexts.length === 1) {
+          const out = await unmasker(uncachedTexts[0], { top_k: topK });
+          batchOut = [Array.isArray(out) ? out : [out]];
+        } else {
+          const out = await unmasker(uncachedTexts, { top_k: topK });
+          batchOut = out.map(o => Array.isArray(o) ? o : [o]);
+        }
+        for (let j = 0; j < uncachedIdx.length; j++) {
+          const i = uncachedIdx[j];
+          const key = getFillMaskCacheKey(modelId, maskedTexts[i], topK);
+          setFillMaskCache(key, batchOut[j]);
+          results[i] = batchOut[j];
+        }
+      }
+      return results;
+    }
+
+    // ── Batch embeddings: un seul passage pour tous les mots à la fois ────────
+    async function getBatchWordEmbeddings(words) {
+      const keys = words.map(w => stripAccents((w || '').trim().toLowerCase()));
+      const toFetch = [...new Set(keys.filter(k => k && !embeddingCache.has(k)))];
+      if (!toFetch.length) return;
+
+      const extractor = await getEmbedder();
+      const output = await extractor(toFetch, { pooling: 'mean', normalize: true });
+      const data = output.data;
+      const dim = Math.round(data.length / toFetch.length);
+      for (let i = 0; i < toFetch.length; i++) {
+        const s = i * dim;
+        embeddingCache.set(toFetch[i], Array.from(data.slice ? data.slice(s, s + dim) : Array.from(data).slice(s, s + dim)));
+      }
+    }
+
+    // ── Scoring synchrone (embeddings déjà en cache) ──────────────────────────
+    function scoreAndChoose(shortlisted, originalWord, distance) {
+      if (!shortlisted.length) return null;
+      const targetSimilarity = mapDistanceToTargetSimilarity(distance);
+      const embOriginal = embeddingCache.get(stripAccents(originalWord.trim().toLowerCase()));
+      const rescored = shortlisted.map(item => {
+        const embCandidate = embeddingCache.get(stripAccents(item.token.trim().toLowerCase()));
+        const similarity = embOriginal && embCandidate ? cosine(embOriginal, embCandidate) : 0.5;
         const semanticFit = 1 - Math.min(1, Math.abs(similarity - targetSimilarity) / 0.9);
         const originality = 1 - item.lexical;
         const finalScore = item.contextual * 0.58 + semanticFit * 0.28 + originality * 0.08 + item.morphology * 0.06;
-        rescored.push({
-          replacement: item.token,
-          contextual: item.contextual,
-          similarity,
-          semanticFit,
-          finalScore,
-          raw: item.cand,
-          rank: item.rank,
-        });
-      }
-
+        return { replacement: item.token, contextual: item.contextual, similarity, semanticFit, finalScore, raw: item.cand, rank: item.rank };
+      });
       rescored.sort((a, b) => b.finalScore - a.finalScore);
       return rescored[0] || null;
+    }
+
+    // ── Compat : wrapper pour les appels éventuels ponctuels ──────────────────
+    async function chooseReplacement(maskedText, originalWord, distance, topK, lang, modelId) {
+      const [candidates] = await getBatchFillMaskCandidates([maskedText], modelId, topK);
+      const shortlisted = preselectCandidates(candidates, originalWord, lang);
+      await getBatchWordEmbeddings([originalWord, ...shortlisted.map(s => s.token)]);
+      return scoreAndChoose(shortlisted, originalWord, distance);
     }
 
     function getMaskToken(modelId) {
@@ -1044,25 +1076,50 @@ Tranquille. Il a deux trous rouges au côté droit.</textarea>
           const changes = [];
           if (!targetIndices.length) { allResults.push({ pass: p + 1, poem: currentText, changes: [] }); continue; }
 
-          for (let step = 0; step < targetIndices.length; step++) {
-            if (!isRunActive(myRunId)) break;
-            const idx = targetIndices[step];
-            const token = tokens[idx];
-            if (!token || token.kind !== 'word') continue;
-            if (!isContentWord(token, lang, tokens, idx)) continue;
-            const maskedText = makeMaskedText(tokens, idx, modelId);
-            const progressBase = ((p + step / Math.max(1, targetIndices.length)) / passes) * 100;
-            showProgress(t('passWord', p + 1, passes, step + 1, targetIndices.length), progressBase, t('searchReplacement', token.value));
-            const choice = await chooseReplacement(maskedText, token.value, dist, topK, lang, modelId);
-            if (!isRunActive(myRunId)) break;
+          // Filtrer les cibles valides une seule fois
+          const validTargets = targetIndices.filter(idx => {
+            const tok = tokens[idx];
+            return tok && tok.kind === 'word' && isContentWord(tok, lang, tokens, idx);
+          });
+          if (!validTargets.length) { allResults.push({ pass: p + 1, poem: currentText, changes: [] }); continue; }
+
+          // ── Étape 1 : batch fill-mask (un seul appel pour tous les mots) ──
+          showProgress(t('passWord', p + 1, passes, 0, validTargets.length), (p / passes) * 100, t('searchReplacement', '…'));
+          const maskedTexts = validTargets.map(idx => makeMaskedText(tokens, idx, modelId));
+          const allCandidatesArr = await getBatchFillMaskCandidates(maskedTexts, modelId, topK);
+          if (!isRunActive(myRunId)) break;
+
+          // ── Étape 2 : présélection + collecte des mots à embedder ──────────
+          const shortlistedMap = new Map();
+          const wordsToEmbed = new Set();
+          for (let i = 0; i < validTargets.length; i++) {
+            const idx = validTargets[i];
+            const sl = preselectCandidates(allCandidatesArr[i], tokens[idx].value, lang);
+            shortlistedMap.set(idx, sl);
+            wordsToEmbed.add(tokens[idx].value);
+            for (const s of sl) wordsToEmbed.add(s.token);
+          }
+
+          // ── Étape 3 : batch embeddings (un seul passage pour tout le lot) ─
+          await getBatchWordEmbeddings([...wordsToEmbed]);
+          if (!isRunActive(myRunId)) break;
+
+          // ── Étape 4 : scoring synchrone (tous les embeddings sont en cache) ─
+          showProgress(t('passWord', p + 1, passes, validTargets.length, validTargets.length), ((p + 0.9) / passes) * 100, '');
+          const choices = validTargets.map(idx => scoreAndChoose(shortlistedMap.get(idx) || [], tokens[idx].value, dist));
+          if (!isRunActive(myRunId)) break;
+
+          // ── Étape 5 : application séquentielle des remplacements ───────────
+          for (let i = 0; i < validTargets.length; i++) {
+            const idx = validTargets[i];
+            const choice = choices[i];
             if (!choice) continue;
-            const replacement = preserveCase(token.value, choice.replacement);
-            if (replacement === token.value) continue;
+            const replacement = preserveCase(tokens[idx].value, choice.replacement);
+            if (replacement === tokens[idx].value) continue;
             const oldValue = tokens[idx].value;
             const start = computeCharStart(tokens, idx);
             tokens[idx].value = replacement;
-            const end = start + replacement.length;
-            changes.push({ index: idx, original: oldValue, replacement, start, end, contextual: choice.contextual, similarity: choice.similarity });
+            changes.push({ index: idx, original: oldValue, replacement, start, end: start + replacement.length, contextual: choice.contextual, similarity: choice.similarity });
           }
 
           currentText = untokenize(tokens);
